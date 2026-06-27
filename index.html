@@ -23,17 +23,18 @@
     }
 
     :root {
-      --bg: #0f172a;
-      --bg2: #1e293b;
-      --ink: #f8fafc;
-      --muted: #94a3b8;
-      --rule: #334155;
-      --accent: #f59e0b;
-      --accent2: #38bdf8;
-      --accent3: #a78bfa;
-      --accent4: #34d399;
+      --bg: #060b14;
+      --bg2: rgba(15, 23, 42, 0.65);
+      --ink: #f1f5f9;
+      --muted: #64748b;
+      --rule: rgba(51, 65, 85, 0.4);
       --font: 'InstrumentSans', 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
       --font-mono: 'JetBrainsMono', 'SF Mono', monospace;
+      --neon-root: #fee440;
+      --neon-simple: #00f5d4;
+      --neon-continuous: #00bbf9;
+      --neon-perfect: #9b5de5;
+      --neon-perfect-continuous: #f15bb5;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,80 +46,113 @@
       overflow: hidden;
     }
 
-    #canvas { width: 100%; height: 100%; position: relative; cursor: grab; overflow: hidden; }
+    #canvas {
+      width: 100%; height: 100%;
+      position: relative; cursor: grab; overflow: hidden;
+      background-image: radial-gradient(circle at 1px 1px, rgba(100,116,139,0.12) 1px, transparent 0);
+      background-size: 36px 36px;
+    }
     #canvas.grabbing { cursor: grabbing; }
     #lines-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-    #lines-svg line { transition: all 0.3s ease; }
-    #lines-svg line.active { stroke-width: 4 !important; opacity: 1 !important; filter: drop-shadow(0 0 4px currentColor); }
-    .node.root { box-shadow: 0 0 40px rgba(245,158,11,0.3), 0 4px 20px rgba(0,0,0,0.3); }
+    #lines-svg path { fill: none; transition: all 0.4s ease; }
+    #lines-svg path.active { stroke-width: 3.5 !important; opacity: 1 !important; filter: drop-shadow(0 0 8px currentColor); }
     #nodes-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
 
     .seq-num {
-      display: inline-block;
-      vertical-align: middle;
-      text-align: center;
-      width: 22px;
-      height: 22px;
-      line-height: 22px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.2);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      margin-right: 5px;
-      border: 1px solid rgba(255,255,255,0.35);
+      display: inline-block; vertical-align: middle; text-align: center;
+      width: 20px; height: 20px; line-height: 20px;
+      border-radius: 50%; background: rgba(255,255,255,0.08);
+      color: #fff; font-size: 11px; font-weight: 700;
+      margin-right: 5px; border: 1px solid rgba(255,255,255,0.18);
     }
+
     .node {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      border-radius: 12px;
-      padding: 10px 18px;
-      font-size: 14px;
-      font-weight: 600;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      white-space: normal;
-      user-select: none;
-      border: 2px solid transparent;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      line-height: 1.35;
-      max-width: 240px;
+      position: absolute; transform: translate(-50%, -50%);
+      border-radius: 14px; font-weight: 600; text-align: center;
+      cursor: pointer; white-space: normal; user-select: none;
+      line-height: 1.4; max-width: 240px;
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .node .sub-label {
-      display: block;
-      font-size: 0.72em;
-      font-weight: 500;
-      opacity: 0.75;
-      margin-top: 1px;
-    }
-    .node .mn-label { font-style: italic; }
-    .node:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-    .node.active { border-color: var(--ink); transform: translate(-50%, -50%) scale(1.1); }
+    .node .sub-label { display: block; font-size: 0.72em; font-weight: 500; opacity: 0.6; margin-top: 2px; }
+    .node .mn-label { font-style: italic; opacity: 0.5; }
+
+    /* Root */
     .node.root {
-      background: linear-gradient(135deg, var(--accent), #d97706);
-      color: #fff; font-size: 20px; padding: 20px 32px; border-radius: 50px; z-index: 10; max-width: 300px;
+      background: linear-gradient(135deg, rgba(254,228,64,0.12), rgba(254,228,64,0.04));
+      backdrop-filter: blur(16px);
+      border: 2px solid rgba(254,228,64,0.35);
+      color: var(--neon-root); font-size: 20px;
+      padding: 24px 40px; border-radius: 60px; z-index: 10;
+      box-shadow: 0 0 40px rgba(254,228,64,0.12), inset 0 0 30px rgba(254,228,64,0.04);
+      animation: rootPulse 3s ease-in-out infinite;
     }
-    .node.branch { background: var(--bg2); color: var(--ink); border: 2px solid var(--rule); font-size: 15px; padding: 14px 20px; min-width: 170px; position: relative; }
-    .node.branch:hover { border-color: var(--accent); }
-    .node.branch.collapsed { opacity: 0.7; }
+    @keyframes rootPulse {
+      0%, 100% { box-shadow: 0 0 40px rgba(254,228,64,0.12), inset 0 0 30px rgba(254,228,64,0.04); }
+      50% { box-shadow: 0 0 70px rgba(254,228,64,0.25), inset 0 0 40px rgba(254,228,64,0.08); }
+    }
+
+    /* Branch */
+    .node.branch {
+      background: rgba(30, 41, 59, 0.5);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-top: 3px solid var(--branch-color, #fff);
+      color: var(--ink); font-size: 15px;
+      padding: 14px 20px; min-width: 170px;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .node.branch:hover {
+      transform: translate(-50%, -55%) scale(1.05);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 0 30px var(--branch-glow, transparent);
+      background: rgba(30, 41, 59, 0.7);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .node.branch.collapsed { opacity: 0.45; transform: translate(-50%, -50%) scale(0.92); }
     .node.branch.collapsed .sub-label { display: none !important; }
     .node.branch::after {
-      content: '\25BE';
-      position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
-      font-size: 14px; color: var(--muted); opacity: 0.7; transition: transform 0.3s ease;
+      content: '\25BE'; position: absolute;
+      bottom: -10px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; opacity: 0.4; transition: all 0.3s ease;
       pointer-events: none;
     }
-    .node.branch.collapsed::after { transform: translateX(-50%) rotate(-90deg); }
-    .node.leaf { background: var(--bg2); color: var(--muted); border: 1px solid var(--rule); font-size: 13px; padding: 10px 16px; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
-    .node.leaf:hover { border-color: var(--accent2); color: var(--ink); }
-    .node.leaf.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
-    .node.leaf.collapsed { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.5); }
-    #lines-svg line.collapsed { opacity: 0 !important; }
-    .branch[data-group="simple"] { border-color: var(--accent4); }
-    .branch[data-group="continuous"] { border-color: var(--accent2); }
-    .branch[data-group="perfect"] { border-color: var(--accent3); }
-    .branch[data-group="perfect-continuous"] { border-color: #fb7185; }
+    .node.branch.collapsed::after { transform: translateX(-50%) rotate(-90deg); opacity: 0.25; }
+
+    /* Leaf */
+    .node.leaf {
+      background: rgba(30, 41, 59, 0.45);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-left: 3px solid var(--leaf-color, transparent);
+      color: var(--muted); font-size: 13px;
+      padding: 10px 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+    .node.leaf:hover {
+      background: rgba(30, 41, 59, 0.75);
+      color: var(--ink);
+      transform: translate(-50%, -55%) scale(1.08);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      border-color: rgba(255,255,255,0.1);
+    }
+    .node.leaf.active {
+      background: rgba(56, 189, 248, 0.12);
+      color: #fff; border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.15);
+    }
+    .node.leaf.collapsed { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.4); }
+
+    #lines-svg path.collapsed { opacity: 0 !important; }
+
+    .branch[data-group="simple"] { --branch-color: var(--neon-simple); --branch-glow: rgba(0,245,212,0.2); }
+    .branch[data-group="continuous"] { --branch-color: var(--neon-continuous); --branch-glow: rgba(0,187,249,0.2); }
+    .branch[data-group="perfect"] { --branch-color: var(--neon-perfect); --branch-glow: rgba(155,93,229,0.2); }
+    .branch[data-group="perfect-continuous"] { --branch-color: var(--neon-perfect-continuous); --branch-glow: rgba(241,91,181,0.2); }
+
+    .leaf[data-group="simple"] { --leaf-color: var(--neon-simple); }
+    .leaf[data-group="continuous"] { --leaf-color: var(--neon-continuous); }
+    .leaf[data-group="perfect"] { --leaf-color: var(--neon-perfect); }
+    .leaf[data-group="perfect-continuous"] { --leaf-color: var(--neon-perfect-continuous); }
 
     /* Panel */
     #detail-panel {
@@ -573,14 +607,16 @@ function createNode(id, html, x, y, type, extra = {}) {
   return { id, x, y, el };
 }
 
-function createLine(x1, y1, x2, y2, color, width) {
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line.setAttribute('stroke', color);
-  line.setAttribute('stroke-width', width || 2);
-  line.dataset.color = color;
-  line.dataset.width = width || 2;
-  svg.appendChild(line);
-  return line;
+function createPath(x1, y1, x2, y2, color, width) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke', color);
+  path.setAttribute('stroke-width', width || 2);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke-linecap', 'round');
+  path.dataset.color = color;
+  path.dataset.width = width || 2;
+  svg.appendChild(path);
+  return path;
 }
 
 const nodes = [], lines = [];
@@ -603,7 +639,7 @@ function buildMap() {
     const bx = centerX + Math.cos(a) * r1;
     const by = centerY + Math.sin(a) * r1;
     nodes.push(createNode(branch.id, branch.name, bx, by, 'branch', { color: branch.color, group: branch.group }));
-    lines.push({ el: createLine(centerX, centerY, bx, by, branch.color, 3), from: 'root', to: branch.id });
+    lines.push({ el: createPath(centerX, centerY, bx, by, branch.color, 3), from: 'root', to: branch.id });
     branch.children.forEach((childId, i) => {
       seqNo++;
       const ca = ((branch.angle - spread + (spread * i)) * Math.PI) / 180;
@@ -611,8 +647,8 @@ function buildMap() {
       const cy = by + Math.sin(ca) * leafDist;
       const d = tenseData[childId];
       const h = '<span class="seq-num">' + seqNo + '</span><span>' + d.name + '<span class="sub-label">' + d.en + '<br><span class="mn-label">' + d.mn + '</span></span></span>';
-      nodes.push(createNode(childId, h, cx, cy, 'leaf'));
-      lines.push({ el: createLine(bx, by, cx, cy, branch.color, 1.5), from: branch.id, to: childId });
+      nodes.push(createNode(childId, h, cx, cy, 'leaf', { group: branch.group }));
+      lines.push({ el: createPath(bx, by, cx, cy, branch.color, 1.5), from: branch.id, to: childId });
     });
   });
 
@@ -646,10 +682,13 @@ function updatePositions() {
   lines.forEach(l => {
     const f = nodes.find(n => n.id === l.from), t = nodes.find(n => n.id === l.to);
     if (f && t) {
-      l.el.setAttribute('x1', centerX + (f.x - centerX) * scale + panX);
-      l.el.setAttribute('y1', centerY + (f.y - centerY) * scale + panY);
-      l.el.setAttribute('x2', centerX + (t.x - centerX) * scale + panX);
-      l.el.setAttribute('y2', centerY + (t.y - centerY) * scale + panY);
+      const fx = centerX + (f.x - centerX) * scale + panX;
+      const fy = centerY + (f.y - centerY) * scale + panY;
+      const tx = centerX + (t.x - centerX) * scale + panX;
+      const ty = centerY + (t.y - centerY) * scale + panY;
+      const mx = (fx + tx) / 2;
+      const my = (fy + ty) / 2;
+      l.el.setAttribute('d', `M ${fx} ${fy} Q ${mx} ${my} ${tx} ${ty}`);
     }
   });
 }

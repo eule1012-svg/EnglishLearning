@@ -105,9 +105,20 @@
     }
     .node.branch { background: var(--bg2); color: var(--ink); border: 2px solid var(--rule); font-size: 15px; padding: 14px 24px; }
     .node.branch:hover { border-color: var(--accent); }
-    .node.leaf { background: var(--bg2); color: var(--muted); border: 1px solid var(--rule); font-size: 13px; padding: 10px 16px; }
+    .node.leaf { background: var(--bg2); color: var(--muted); border: 1px solid var(--rule); font-size: 13px; padding: 10px 16px; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
     .node.leaf:hover { border-color: var(--accent2); color: var(--ink); }
     .node.leaf.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+    .node.leaf.collapsed { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.5); }
+    .node.branch { position: relative; }
+    .node.branch::after {
+      content: '\25BE';
+      position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
+      font-size: 14px; color: var(--muted); opacity: 0.7; transition: transform 0.3s ease;
+      pointer-events: none;
+    }
+    .node.branch.collapsed::after { transform: translateX(-50%) rotate(-90deg); }
+    .node.branch.collapsed { opacity: 0.7; }
+    #lines-svg line.collapsed { opacity: 0 !important; }
     .branch[data-group="simple"] { border-color: var(--accent4); }
     .branch[data-group="continuous"] { border-color: var(--accent2); }
     .branch[data-group="perfect"] { border-color: var(--accent3); }
@@ -117,9 +128,11 @@
     #detail-panel {
       position: fixed; top: 0; right: -520px; width: 500px; height: 100%;
       background: var(--bg2); border-left: 1px solid var(--rule); z-index: 100;
-      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow-y: auto; box-shadow: -10px 0 40px rgba(0,0,0,0.4);
+      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease; overflow-y: auto; box-shadow: -10px 0 40px rgba(0,0,0,0.4);
     }
     #detail-panel.open { right: 0; }
+    #detail-panel.wide { width: 640px; right: -660px; }
+    #detail-panel.wide.open { right: 0; }
     .panel-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--rule); position: sticky; top: 0; background: var(--bg2); z-index: 10; }
     .panel-header h2 { font-size: 1.4rem; color: var(--accent); margin-bottom: 2px; }
     .panel-header .sub-names { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
@@ -553,6 +566,12 @@ function createNode(id, html, x, y, type, extra = {}) {
       highlightLines(id);
     });
   }
+  if (type === 'branch') {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleBranch(id);
+    });
+  }
   nodesLayer.appendChild(el);
   return { id, x, y, el };
 }
@@ -606,6 +625,27 @@ function highlightLines(leafId) {
   lines.forEach(l => { if (l.to === leafId || l.to === b.id && l.from === 'root' || l.from === b.id && l.to === leafId) l.el.classList.add('active'); });
 }
 
+// ==================== BRANCH COLLAPSE ====================
+function toggleBranch(branchId) {
+  const branch = branches.find(b => b.id === branchId);
+  if (!branch) return;
+  const branchNode = nodes.find(n => n.id === branchId);
+  if (!branchNode) return;
+  const isCollapsed = branchNode.el.dataset.collapsed === 'true';
+  const willCollapse = !isCollapsed;
+  branch.children.forEach(childId => {
+    const node = nodes.find(n => n.id === childId);
+    if (node) node.el.classList.toggle('collapsed', willCollapse);
+  });
+  lines.forEach(l => {
+    if (l.from === branchId && branch.children.includes(l.to)) {
+      l.el.classList.toggle('collapsed', willCollapse);
+    }
+  });
+  branchNode.el.dataset.collapsed = willCollapse;
+  branchNode.el.classList.toggle('collapsed', willCollapse);
+}
+
 // ==================== PAN ====================
 canvas.addEventListener('mousedown', e => { if (e.target.classList.contains('node')) return; isDragging = true; dragStartX = e.clientX - panX; dragStartY = e.clientY - panY; canvas.classList.add('grabbing'); });
 document.addEventListener('mousemove', e => { if (!isDragging) return; panX = e.clientX - dragStartX; panY = e.clientY - dragStartY; updatePositions(); });
@@ -624,6 +664,7 @@ function openPanel(id) {
   document.getElementById('panel-en').textContent = data.en;
   document.getElementById('panel-mn').textContent = data.mn;
   const body = document.getElementById('panel-body');
+  panel.classList.add('wide');
   body.innerHTML = `
     <div class="panel-section">
       <h3>定义 <span class="sec-mn">Тодорхойлолт</span></h3>
@@ -665,6 +706,7 @@ function openPanel(id) {
 
 function closePanel() {
   panel.classList.remove('open');
+  setTimeout(() => panel.classList.remove('wide'), 400);
   document.querySelectorAll('.node.leaf').forEach(n => n.classList.remove('active'));
   lines.forEach(l => l.el.classList.remove('active'));
 }

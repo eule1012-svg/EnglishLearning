@@ -99,7 +99,6 @@
       border-top: 3px solid var(--branch-color, #fff);
       color: var(--ink); font-size: 15px;
       padding: 14px 20px; min-width: 170px;
-      position: relative;
       box-shadow: 0 4px 20px rgba(0,0,0,0.25);
     }
     .node.branch:hover {
@@ -111,12 +110,17 @@
     .node.branch.collapsed { opacity: 0.45; transform: translate(-50%, -50%) scale(0.92); }
     .node.branch.collapsed .sub-label { display: none !important; }
     .node.branch::after {
-      content: '\25B8'; position: absolute;
-      right: -12px; top: 50%; transform: translateY(-50%);
-      font-size: 13px; opacity: 0.5; transition: all 0.3s ease;
+      content: '';
+      position: absolute; right: -8px; top: 50%;
+      width: 0; height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid rgba(148,163,184,0.5);
+      transform: translateY(-50%);
+      transition: all 0.3s ease;
       pointer-events: none;
     }
-    .node.branch.collapsed::after { transform: translateY(-50%) rotate(90deg); opacity: 0.25; }
+    .node.branch.collapsed::after { transform: translateY(-50%) rotate(180deg); opacity: 0.3; }
 
     /* Leaf */
     .node.leaf {
@@ -634,39 +638,37 @@ function buildMap() {
   centerX = W / 2;
   centerY = H / 2;
 
-  // Horizontal gaps (space between columns)
-  const colGap1 = Math.max(60, W * 0.07); // root → branch
-  const colGap2 = Math.max(50, W * 0.06); // branch → leaf
-  const rightPad = W * 0.18; // leave room for panel on right
-  const usableW = W - rightPad;
-  // Node half-widths (must match createNode)
-  const rootHw = 110, branchHw = 90, leafHw = 82;
-  const x0 = rootHw + 30; // root x (center)
-  const x1 = x0 + rootHw + colGap1 + branchHw; // branch x (center)
-  let x2 = x1 + branchHw + colGap2 + leafHw;
-  if (x2 + leafHw > usableW) x2 = usableW - leafHw;
-
-  // Vertical distribution
+  // Vertical distribution — all 12 leaves evenly spread across usable height
   const branchCount = branches.length;
-  const topPad = 40, bottomPad = 40;
-  const availableH = H - topPad - bottomPad;
-  const rootY = H / 2;
-
-  // Leaf gap sized to fill available height
-  const leafGap = Math.max(54, (availableH / branchCount) / 2.8);
-  const branchSlotH = availableH / branchCount;
+  const leavesPerBranch = 3;
+  const totalLeaves = branchCount * leavesPerBranch; // 12
+  const topPad = 20;
+  const bottomPad = 75; // hint bar ~40px + margin
+  const leafHalfH = 32; // approx leaf node half-height to prevent edge clipping
+  const usableTop = topPad + leafHalfH;
+  const usableBottom = H - bottomPad - leafHalfH;
+  const leafSpan = usableBottom - usableTop;
+  // Place 12 leaf Y positions evenly across the full usable range
+  const leafYs = [];
+  for (let i = 0; i < totalLeaves; i++) {
+    leafYs.push(usableTop + (leafSpan * i) / (totalLeaves - 1));
+  }
+  // Branch Y = center Y of its 3 leaves (i.e. the middle leaf's Y)
   const branchYs = [];
   for (let bi = 0; bi < branchCount; bi++) {
-    branchYs.push(topPad + branchSlotH * (bi + 0.5));
+    branchYs.push(leafYs[bi * leavesPerBranch + 1]);
   }
+  // Root Y = vertical center of the entire tree
+  const rootY = (leafYs[0] + leafYs[totalLeaves - 1]) / 2;
 
-  // Create root
-  nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', x0, rootY, 'root'));
+  // Create all nodes with temporary x=0 (we'll position after measuring)
+  nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', 0, rootY, 'root'));
 
   let seqNo = 0;
+  let leafIdx = 0;
   branches.forEach((branch, bi) => {
     const by = branchYs[bi];
-    nodes.push(createNode(branch.id, branch.name, x1, by, 'branch', { color: branch.color, group: branch.group }));
+    nodes.push(createNode(branch.id, branch.name, 0, by, 'branch', { color: branch.color, group: branch.group }));
     lines.push({
       el: createPath(0, 0, 0, 0, branch.color, 3),
       from: 'root', to: branch.id,
@@ -674,10 +676,10 @@ function buildMap() {
     });
     branch.children.forEach((childId, i) => {
       seqNo++;
-      const ly = by + (i - 1) * leafGap;
+      const ly = leafYs[leafIdx++];
       const d = tenseData[childId];
       const h = '<span class="seq-num">' + seqNo + '</span><span>' + d.name + '<span class="sub-label">' + d.en + '<br><span class="mn-label">' + d.mn + '</span></span></span>';
-      nodes.push(createNode(childId, h, x2, ly, 'leaf', { group: branch.group }));
+      nodes.push(createNode(childId, h, 0, ly, 'leaf', { group: branch.group }));
       lines.push({
         el: createPath(0, 0, 0, 0, branch.color, 1.5),
         from: branch.id, to: childId,
@@ -685,6 +687,35 @@ function buildMap() {
       });
     });
   });
+
+  // Measure actual rendered node dimensions
+  nodes.forEach(n => {
+    n.hw = n.el.offsetWidth / 2;
+    n.hh = n.el.offsetHeight / 2;
+  });
+
+  // Get measured half-widths per type (use max within each type for consistency)
+  const rootNode = nodes.find(n => n.id === 'root');
+  const branchNodes = nodes.filter(n => n.el.classList.contains('branch'));
+  const leafNodes = nodes.filter(n => n.el.classList.contains('leaf'));
+  const rHW = rootNode.hw;
+  const bHW = Math.max(...branchNodes.map(n => n.hw));
+  const lHW = Math.max(...leafNodes.map(n => n.hw));
+
+  // Calculate horizontal positions using measured widths
+  const colGap1 = Math.max(70, W * 0.07); // root → branch
+  const colGap2 = Math.max(60, W * 0.06); // branch → leaf
+  const sideMargin = 30;
+  const treeW = rHW * 2 + colGap1 + bHW * 2 + colGap2 + lHW * 2;
+  const treeLeft = Math.max(sideMargin, (W - treeW) / 2);
+  const x0 = treeLeft + rHW;
+  const x1 = x0 + rHW + colGap1 + bHW;
+  const x2 = Math.min(x1 + bHW + colGap2 + lHW, W - sideMargin - lHW);
+
+  // Apply x positions
+  rootNode.x = x0;
+  branchNodes.forEach(n => { n.x = x1; });
+  leafNodes.forEach(n => { n.x = x2; });
 
   updatePositions();
 
@@ -696,7 +727,11 @@ function buildMap() {
       n.el.style.transition = 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
       n.el.style.opacity = '1';
       n.el.style.transform = 'translate(-50%, -50%) translateX(0) scale(1)';
-      setTimeout(() => { n.el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'; }, 500);
+      setTimeout(() => {
+        n.el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        // Clear inline transform so CSS classes (e.g. .collapsed) can control it
+        n.el.style.transform = '';
+      }, 500);
     }, i * 50);
   });
   lines.forEach((l, i) => {
@@ -732,12 +767,30 @@ function updatePositions() {
     if (!f || !t) return;
     const p1 = getNodeEdgePoint(f, 'right');
     const p2 = getNodeEdgePoint(t, 'left');
-    const dx = p2.x - p1.x;
-    const cp1x = p1.x + dx * 0.4;
-    const cp1y = p1.y;
-    const cp2x = p2.x - dx * 0.4;
-    const cp2y = p2.y;
-    l.el.setAttribute('d', `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`);
+    const midX = (p1.x + p2.x) / 2;
+    const r = 12; // corner radius
+    const dy = p2.y - p1.y;
+    let d;
+    if (Math.abs(dy) < 3) {
+      d = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+    } else if (dy > 0) {
+      // Going down: ┌─┐ shape (two bottom corners)
+      d = `M ${p1.x} ${p1.y}
+           L ${midX - r} ${p1.y}
+           Q ${midX} ${p1.y} ${midX} ${p1.y + r}
+           L ${midX} ${p2.y - r}
+           Q ${midX} ${p2.y} ${midX + r} ${p2.y}
+           L ${p2.x} ${p2.y}`;
+    } else {
+      // Going up: └─┘ shape (two top corners)
+      d = `M ${p1.x} ${p1.y}
+           L ${midX - r} ${p1.y}
+           Q ${midX} ${p1.y} ${midX} ${p1.y - r}
+           L ${midX} ${p2.y + r}
+           Q ${midX} ${p2.y} ${midX + r} ${p2.y}
+           L ${p2.x} ${p2.y}`;
+    }
+    l.el.setAttribute('d', d);
   });
 }
 

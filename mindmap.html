@@ -48,8 +48,9 @@
     #canvas { width: 100%; height: 100%; position: relative; cursor: grab; overflow: hidden; }
     #canvas.grabbing { cursor: grabbing; }
     #lines-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-    #lines-svg line { stroke-width: 2; opacity: 0.6; transition: all 0.3s ease; }
-    #lines-svg line.active { stroke-width: 3; opacity: 1; }
+    #lines-svg line { transition: all 0.3s ease; }
+    #lines-svg line.active { stroke-width: 4 !important; opacity: 1 !important; filter: drop-shadow(0 0 4px currentColor); }
+    .node.root { box-shadow: 0 0 40px rgba(245,158,11,0.3), 0 4px 20px rgba(0,0,0,0.3); }
     #nodes-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
 
     .seq-num {
@@ -205,7 +206,7 @@
     <svg id="lines-svg"></svg>
     <div id="nodes-layer"></div>
   </div>
-  <div id="hint">拖拽移动画布 · 点击节点查看详解 | Drag to pan · Click to explore</div>
+  <div id="hint">滚轮缩放 · 拖拽移动 · 双击重置 · 悬停高亮路径 | Scroll to zoom · Drag to pan · Double-click to reset</div>
   <div id="detail-panel">
     <div class="panel-header">
       <h2 id="panel-title"></h2>
@@ -545,18 +546,19 @@ const nodesLayer = document.getElementById('nodes-layer');
 const svg = document.getElementById('lines-svg');
 let centerX = window.innerWidth / 2, centerY = window.innerHeight / 2;
 let panX = 0, panY = 0, isDragging = false, dragStartX, dragStartY;
-const branchRadius = Math.min(window.innerWidth, window.innerHeight) * 0.22;
-const leafRadius = Math.min(window.innerWidth, window.innerHeight) * 0.38;
+let scale = 1;
 
 function createNode(id, html, x, y, type, extra = {}) {
   const el = document.createElement('div');
   el.className = `node ${type}`;
   el.innerHTML = html;
   el.dataset.id = id;
-  el.style.left = (x + panX) + 'px';
-  el.style.top = (y + panY) + 'px';
   if (extra.group) el.dataset.group = extra.group;
   if (extra.color && type === 'branch') el.style.borderColor = extra.color;
+
+  el.addEventListener('mouseenter', () => highlightPath(id));
+  el.addEventListener('mouseleave', () => clearPathHighlight());
+
   if (type === 'leaf') {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -576,11 +578,12 @@ function createNode(id, html, x, y, type, extra = {}) {
   return { id, x, y, el };
 }
 
-function createLine(x1, y1, x2, y2, color, id) {
+function createLine(x1, y1, x2, y2, color, width) {
   const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line.setAttribute('x1', x1 + panX); line.setAttribute('y1', y1 + panY);
-  line.setAttribute('x2', x2 + panX); line.setAttribute('y2', y2 + panY);
-  line.setAttribute('stroke', color); line.dataset.from = id;
+  line.setAttribute('stroke', color);
+  line.setAttribute('stroke-width', width || 2);
+  line.dataset.color = color;
+  line.dataset.width = width || 2;
   svg.appendChild(line);
   return line;
 }
@@ -590,31 +593,68 @@ const nodes = [], lines = [];
 function buildMap() {
   nodesLayer.innerHTML = ''; svg.innerHTML = ''; nodes.length = 0; lines.length = 0;
   centerX = window.innerWidth / 2; centerY = window.innerHeight / 2;
+
+  const R = Math.min(window.innerWidth, window.innerHeight);
+  const r1 = R * 0.23;
+  const r2 = R * 0.42;
+  const spread = 26;
+
   nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', centerX, centerY, 'root'));
+
   let seqNo = 0;
   branches.forEach(branch => {
     const a = (branch.angle * Math.PI) / 180;
-    const bx = centerX + Math.cos(a) * branchRadius, by = centerY + Math.sin(a) * branchRadius;
+    const bx = centerX + Math.cos(a) * r1;
+    const by = centerY + Math.sin(a) * r1;
     nodes.push(createNode(branch.id, branch.name, bx, by, 'branch', { color: branch.color, group: branch.group }));
-    lines.push({ el: createLine(centerX, centerY, bx, by, branch.color, branch.id), from: 'root', to: branch.id });
-    const spread = 30;
+    lines.push({ el: createLine(centerX, centerY, bx, by, branch.color, 3), from: 'root', to: branch.id });
     branch.children.forEach((childId, i) => {
       seqNo++;
       const ca = ((branch.angle - spread + (spread * i)) * Math.PI) / 180;
-      const cx = centerX + Math.cos(ca) * leafRadius, cy = centerY + Math.sin(ca) * leafRadius;
+      const cx = centerX + Math.cos(ca) * r2;
+      const cy = centerY + Math.sin(ca) * r2;
       const d = tenseData[childId];
       const h = '<span class="seq-num">' + seqNo + '</span><span>' + d.name + '<span class="sub-label">' + d.en + '<br><span class="mn-label">' + d.mn + '</span></span></span>';
       nodes.push(createNode(childId, h, cx, cy, 'leaf'));
-      lines.push({ el: createLine(bx, by, cx, cy, branch.color, childId), from: branch.id, to: childId });
+      lines.push({ el: createLine(bx, by, cx, cy, branch.color, 1.5), from: branch.id, to: childId });
     });
+  });
+
+  updatePositions();
+
+  // Entrance animation
+  nodes.forEach((n, i) => {
+    n.el.style.opacity = '0';
+    n.el.style.transform = 'translate(-50%, -50%) scale(0)';
+    setTimeout(() => {
+      n.el.style.transition = 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      n.el.style.opacity = '1';
+      n.el.style.transform = 'translate(-50%, -50%) scale(1)';
+      setTimeout(() => { n.el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'; }, 500);
+    }, i * 60);
+  });
+  lines.forEach((l, i) => {
+    l.el.style.opacity = '0';
+    setTimeout(() => {
+      l.el.style.transition = 'opacity 0.4s ease';
+      l.el.style.opacity = l.el.dataset.width === '3' ? '0.7' : '0.4';
+    }, 300 + i * 40);
   });
 }
 
 function updatePositions() {
-  nodes.forEach(n => { n.el.style.left = (n.x + panX) + 'px'; n.el.style.top = (n.y + panY) + 'px'; });
+  nodes.forEach(n => {
+    n.el.style.left = (centerX + (n.x - centerX) * scale + panX) + 'px';
+    n.el.style.top = (centerY + (n.y - centerY) * scale + panY) + 'px';
+  });
   lines.forEach(l => {
     const f = nodes.find(n => n.id === l.from), t = nodes.find(n => n.id === l.to);
-    if (f && t) { l.el.setAttribute('x1', f.x + panX); l.el.setAttribute('y1', f.y + panY); l.el.setAttribute('x2', t.x + panX); l.el.setAttribute('y2', t.y + panY); }
+    if (f && t) {
+      l.el.setAttribute('x1', centerX + (f.x - centerX) * scale + panX);
+      l.el.setAttribute('y1', centerY + (f.y - centerY) * scale + panY);
+      l.el.setAttribute('x2', centerX + (t.x - centerX) * scale + panX);
+      l.el.setAttribute('y2', centerY + (t.y - centerY) * scale + panY);
+    }
   });
 }
 
@@ -622,7 +662,23 @@ function highlightLines(leafId) {
   const b = branches.find(b => b.children.includes(leafId));
   if (!b) return;
   lines.forEach(l => l.el.classList.remove('active'));
-  lines.forEach(l => { if (l.to === leafId || l.to === b.id && l.from === 'root' || l.from === b.id && l.to === leafId) l.el.classList.add('active'); });
+  lines.forEach(l => { if (l.to === leafId || (l.to === b.id && l.from === 'root') || (l.from === b.id && l.to === leafId)) l.el.classList.add('active'); });
+}
+
+function highlightPath(nodeId) {
+  if (nodeId === 'root') return;
+  const branch = branches.find(b => b.id === nodeId || b.children.includes(nodeId));
+  if (!branch) return;
+  lines.forEach(l => l.el.classList.remove('active'));
+  if (branch.children.includes(nodeId)) {
+    lines.forEach(l => { if (l.to === nodeId || (l.to === branch.id && l.from === 'root')) l.el.classList.add('active'); });
+  } else {
+    lines.forEach(l => { if (l.to === nodeId || l.from === nodeId) l.el.classList.add('active'); });
+  }
+}
+
+function clearPathHighlight() {
+  lines.forEach(l => l.el.classList.remove('active'));
 }
 
 // ==================== BRANCH COLLAPSE ====================
@@ -646,13 +702,26 @@ function toggleBranch(branchId) {
   branchNode.el.classList.toggle('collapsed', willCollapse);
 }
 
-// ==================== PAN ====================
-canvas.addEventListener('mousedown', e => { if (e.target.classList.contains('node')) return; isDragging = true; dragStartX = e.clientX - panX; dragStartY = e.clientY - panY; canvas.classList.add('grabbing'); });
+// ==================== PAN & ZOOM ====================
+canvas.addEventListener('mousedown', e => { if (e.target.closest('.node')) return; isDragging = true; dragStartX = e.clientX - panX; dragStartY = e.clientY - panY; canvas.classList.add('grabbing'); });
 document.addEventListener('mousemove', e => { if (!isDragging) return; panX = e.clientX - dragStartX; panY = e.clientY - dragStartY; updatePositions(); });
 document.addEventListener('mouseup', () => { isDragging = false; canvas.classList.remove('grabbing'); });
-canvas.addEventListener('touchstart', e => { if (e.target.classList.contains('node')) return; isDragging = true; dragStartX = e.touches[0].clientX - panX; dragStartY = e.touches[0].clientY - panY; });
+canvas.addEventListener('touchstart', e => { if (e.target.closest('.node')) return; isDragging = true; dragStartX = e.touches[0].clientX - panX; dragStartY = e.touches[0].clientY - panY; });
 document.addEventListener('touchmove', e => { if (!isDragging) return; panX = e.touches[0].clientX - dragStartX; panY = e.touches[0].clientY - dragStartY; updatePositions(); });
 document.addEventListener('touchend', () => { isDragging = false; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.92 : 1.08;
+  scale = Math.max(0.3, Math.min(3, scale * delta));
+  updatePositions();
+}, { passive: false });
+
+canvas.addEventListener('dblclick', e => {
+  if (e.target.closest('.node')) return;
+  scale = 1; panX = 0; panY = 0;
+  updatePositions();
+});
 
 // ==================== PANEL ====================
 const panel = document.getElementById('detail-panel');

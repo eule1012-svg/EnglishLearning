@@ -628,29 +628,60 @@ function buildMap() {
   centerX = W / 2;
   centerY = H / 2;
 
-  const x0 = W * 0.07;
-  const x1 = W * 0.30;
-  const x2 = W * 0.58;
+  // Estimated node sizes (padding + content)
+  // Root: pill, ~220px wide; Branch: ~170px min + padding; Leaf: ~160px + padding
+  const rootHalfW = 110, rootHalfH = 30;
+  const branchHalfW = 90, branchHalfH = 28;
+  const leafHalfW = 80, leafHalfH = 26;
+
+  // Horizontal gaps (space between columns)
+  const colGap1 = Math.max(60, W * 0.07); // root → branch
+  const colGap2 = Math.max(50, W * 0.06); // branch → leaf
+  const rightPad = W * 0.18; // leave room for panel on right
+  const usableW = W - rightPad;
+  const x0 = rootHalfW + 30; // root x (center)
+  const x1 = x0 + rootHalfW + colGap1 + branchHalfW; // branch x (center)
+  // Place leaf column so right edge of leaf doesn't exceed usableW
+  let x2 = x1 + branchHalfW + colGap2 + leafHalfW;
+  if (x2 + leafHalfW > usableW) x2 = usableW - leafHalfW;
+
+  // Vertical distribution
   const branchCount = branches.length;
-  const availableHeight = H - 80;
-  const branchGap = availableHeight / (branchCount + 1);
+  const topPad = 40, bottomPad = 40;
+  const availableH = H - topPad - bottomPad;
   const rootY = H / 2;
 
+  // Leaf gap sized to fill available height
+  const leafGap = Math.max(54, (availableH / branchCount) / 2.8);
+  const branchSlotH = availableH / branchCount;
+  const branchYs = [];
+  for (let bi = 0; bi < branchCount; bi++) {
+    branchYs.push(topPad + branchSlotH * (bi + 0.5));
+  }
+
+  // Create root
   nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', x0, rootY, 'root'));
 
   let seqNo = 0;
   branches.forEach((branch, bi) => {
-    const branchY = 40 + (bi + 1) * branchGap;
-    nodes.push(createNode(branch.id, branch.name, x1, branchY, 'branch', { color: branch.color, group: branch.group }));
-    lines.push({ el: createPath(x0, rootY, x1, branchY, branch.color, 3), from: 'root', to: branch.id });
-    const leafGap = 52;
+    const by = branchYs[bi];
+    nodes.push(createNode(branch.id, branch.name, x1, by, 'branch', { color: branch.color, group: branch.group }));
+    lines.push({
+      el: createPath(0, 0, 0, 0, branch.color, 3),
+      from: 'root', to: branch.id,
+      srcType: 'root', dstType: 'branch'
+    });
     branch.children.forEach((childId, i) => {
       seqNo++;
-      const leafY = branchY + (i - 1) * leafGap;
+      const ly = by + (i - 1) * leafGap;
       const d = tenseData[childId];
       const h = '<span class="seq-num">' + seqNo + '</span><span>' + d.name + '<span class="sub-label">' + d.en + '<br><span class="mn-label">' + d.mn + '</span></span></span>';
-      nodes.push(createNode(childId, h, x2, leafY, 'leaf', { group: branch.group }));
-      lines.push({ el: createPath(x1, branchY, x2, leafY, branch.color, 1.5), from: branch.id, to: childId });
+      nodes.push(createNode(childId, h, x2, ly, 'leaf', { group: branch.group }));
+      lines.push({
+        el: createPath(0, 0, 0, 0, branch.color, 1.5),
+        from: branch.id, to: childId,
+        srcType: 'branch', dstType: 'leaf'
+      });
     });
   });
 
@@ -676,22 +707,39 @@ function buildMap() {
   });
 }
 
+function getNodeEdgePoint(node, direction) {
+  const rect = node.el.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  const left = rect.left - canvasRect.left;
+  const top = rect.top - canvasRect.top;
+  if (direction === 'right') {
+    return { x: left + rect.width, y: top + rect.height / 2 };
+  } else {
+    return { x: left, y: top + rect.height / 2 };
+  }
+}
+
 function updatePositions() {
   nodes.forEach(n => {
     n.el.style.left = (centerX + (n.x - centerX) * scale + panX) + 'px';
     n.el.style.top = (centerY + (n.y - centerY) * scale + panY) + 'px';
   });
-  lines.forEach(l => {
-    const f = nodes.find(n => n.id === l.from), t = nodes.find(n => n.id === l.to);
-    if (f && t) {
-      const fx = centerX + (f.x - centerX) * scale + panX;
-      const fy = centerY + (f.y - centerY) * scale + panY;
-      const tx = centerX + (t.x - centerX) * scale + panX;
-      const ty = centerY + (t.y - centerY) * scale + panY;
-      const mx = (fx + tx) / 2;
-      const my = (fy + ty) / 2;
-      l.el.setAttribute('d', `M ${fx} ${fy} Q ${mx} ${my} ${tx} ${ty}`);
-    }
+  // Connect lines to node edges using actual measurements
+  requestAnimationFrame(() => {
+    lines.forEach(l => {
+      const f = nodes.find(n => n.id === l.from);
+      const t = nodes.find(n => n.id === l.to);
+      if (!f || !t) return;
+      const p1 = getNodeEdgePoint(f, 'right');
+      const p2 = getNodeEdgePoint(t, 'left');
+      // Smooth horizontal bezier: control points offset horizontally
+      const dx = p2.x - p1.x;
+      const cp1x = p1.x + dx * 0.4;
+      const cp1y = p1.y;
+      const cp2x = p2.x - dx * 0.4;
+      const cp2y = p2.y;
+      l.el.setAttribute('d', `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`);
+    });
   });
 }
 

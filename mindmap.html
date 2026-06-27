@@ -595,9 +595,10 @@ function buildMap() {
   centerX = window.innerWidth / 2; centerY = window.innerHeight / 2;
 
   const R = Math.min(window.innerWidth, window.innerHeight);
-  const r1 = R * 0.24;
-  const leafDist = R * 0.28;
-  const spread = 32;
+  const totalDist = R * 0.34;
+  const r1 = totalDist * 0.5;
+  const leafDist = totalDist * 0.5;
+  const spread = 28;
 
   nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', centerX, centerY, 'root'));
 

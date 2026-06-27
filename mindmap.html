@@ -595,9 +595,9 @@ function buildMap() {
   centerX = window.innerWidth / 2; centerY = window.innerHeight / 2;
 
   const R = Math.min(window.innerWidth, window.innerHeight);
-  const r1 = R * 0.23;
-  const r2 = R * 0.42;
-  const spread = 26;
+  const r1 = R * 0.24;
+  const leafDist = R * 0.28;
+  const spread = 32;
 
   nodes.push(createNode('root', '英文语法时态<span class="sub-label">English Grammar Tenses<br><span class="mn-label">Англи хэлний цаг хийм</span></span>', centerX, centerY, 'root'));
 
@@ -611,8 +611,8 @@ function buildMap() {
     branch.children.forEach((childId, i) => {
       seqNo++;
       const ca = ((branch.angle - spread + (spread * i)) * Math.PI) / 180;
-      const cx = centerX + Math.cos(ca) * r2;
-      const cy = centerY + Math.sin(ca) * r2;
+      const cx = bx + Math.cos(ca) * leafDist;
+      const cy = by + Math.sin(ca) * leafDist;
       const d = tenseData[childId];
       const h = '<span class="seq-num">' + seqNo + '</span><span>' + d.name + '<span class="sub-label">' + d.en + '<br><span class="mn-label">' + d.mn + '</span></span></span>';
       nodes.push(createNode(childId, h, cx, cy, 'leaf'));

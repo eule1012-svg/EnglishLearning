@@ -585,6 +585,12 @@ function createNode(id, html, x, y, type, extra = {}) {
   if (extra.group) el.dataset.group = extra.group;
   if (extra.color && type === 'branch') el.style.borderColor = extra.color;
 
+  // Approximate half-dimensions per type (used for edge connection points)
+  let hw = 80, hh = 26;
+  if (type === 'root') { hw = 110; hh = 32; }
+  else if (type === 'branch') { hw = 90; hh = 28; }
+  else if (type === 'leaf') { hw = 82; hh = 26; }
+
   el.addEventListener('mouseenter', () => highlightPath(id));
   el.addEventListener('mouseleave', () => clearPathHighlight());
 
@@ -604,7 +610,7 @@ function createNode(id, html, x, y, type, extra = {}) {
     });
   }
   nodesLayer.appendChild(el);
-  return { id, x, y, el };
+  return { id, x, y, el, hw, hh };
 }
 
 function createPath(x1, y1, x2, y2, color, width) {
@@ -628,22 +634,17 @@ function buildMap() {
   centerX = W / 2;
   centerY = H / 2;
 
-  // Estimated node sizes (padding + content)
-  // Root: pill, ~220px wide; Branch: ~170px min + padding; Leaf: ~160px + padding
-  const rootHalfW = 110, rootHalfH = 30;
-  const branchHalfW = 90, branchHalfH = 28;
-  const leafHalfW = 80, leafHalfH = 26;
-
   // Horizontal gaps (space between columns)
   const colGap1 = Math.max(60, W * 0.07); // root → branch
   const colGap2 = Math.max(50, W * 0.06); // branch → leaf
   const rightPad = W * 0.18; // leave room for panel on right
   const usableW = W - rightPad;
-  const x0 = rootHalfW + 30; // root x (center)
-  const x1 = x0 + rootHalfW + colGap1 + branchHalfW; // branch x (center)
-  // Place leaf column so right edge of leaf doesn't exceed usableW
-  let x2 = x1 + branchHalfW + colGap2 + leafHalfW;
-  if (x2 + leafHalfW > usableW) x2 = usableW - leafHalfW;
+  // Node half-widths (must match createNode)
+  const rootHw = 110, branchHw = 90, leafHw = 82;
+  const x0 = rootHw + 30; // root x (center)
+  const x1 = x0 + rootHw + colGap1 + branchHw; // branch x (center)
+  let x2 = x1 + branchHw + colGap2 + leafHw;
+  if (x2 + leafHw > usableW) x2 = usableW - leafHw;
 
   // Vertical distribution
   const branchCount = branches.length;
@@ -708,14 +709,15 @@ function buildMap() {
 }
 
 function getNodeEdgePoint(node, direction) {
-  const rect = node.el.getBoundingClientRect();
-  const canvasRect = canvas.getBoundingClientRect();
-  const left = rect.left - canvasRect.left;
-  const top = rect.top - canvasRect.top;
+  // Calculate visual center (accounting for scale/pan)
+  const cx = centerX + (node.x - centerX) * scale + panX;
+  const cy = centerY + (node.y - centerY) * scale + panY;
+  const adjHw = node.hw * scale;
+  const adjHh = node.hh * scale;
   if (direction === 'right') {
-    return { x: left + rect.width, y: top + rect.height / 2 };
+    return { x: cx + adjHw, y: cy };
   } else {
-    return { x: left, y: top + rect.height / 2 };
+    return { x: cx - adjHw, y: cy };
   }
 }
 
@@ -724,22 +726,18 @@ function updatePositions() {
     n.el.style.left = (centerX + (n.x - centerX) * scale + panX) + 'px';
     n.el.style.top = (centerY + (n.y - centerY) * scale + panY) + 'px';
   });
-  // Connect lines to node edges using actual measurements
-  requestAnimationFrame(() => {
-    lines.forEach(l => {
-      const f = nodes.find(n => n.id === l.from);
-      const t = nodes.find(n => n.id === l.to);
-      if (!f || !t) return;
-      const p1 = getNodeEdgePoint(f, 'right');
-      const p2 = getNodeEdgePoint(t, 'left');
-      // Smooth horizontal bezier: control points offset horizontally
-      const dx = p2.x - p1.x;
-      const cp1x = p1.x + dx * 0.4;
-      const cp1y = p1.y;
-      const cp2x = p2.x - dx * 0.4;
-      const cp2y = p2.y;
-      l.el.setAttribute('d', `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`);
-    });
+  lines.forEach(l => {
+    const f = nodes.find(n => n.id === l.from);
+    const t = nodes.find(n => n.id === l.to);
+    if (!f || !t) return;
+    const p1 = getNodeEdgePoint(f, 'right');
+    const p2 = getNodeEdgePoint(t, 'left');
+    const dx = p2.x - p1.x;
+    const cp1x = p1.x + dx * 0.4;
+    const cp1y = p1.y;
+    const cp2x = p2.x - dx * 0.4;
+    const cp2y = p2.y;
+    l.el.setAttribute('d', `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`);
   });
 }
 
